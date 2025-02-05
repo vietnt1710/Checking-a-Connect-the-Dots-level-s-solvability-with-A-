@@ -7,7 +7,8 @@ using UnityEngine;
 
 public class ConnectTheDotsAlgorithm : MonoBehaviour
 
-{   private int[,] grid; // Ma trận lưới chứa các giá trị điểm
+{
+    private int[,] grid; // Ma trận lưới chứa các giá trị điểm
     private int[,] _tempGrid; // Ma trận tạm để lưu trữ lưới gốc
 
     [Header("Tile gốc ")]
@@ -17,7 +18,7 @@ public class ConnectTheDotsAlgorithm : MonoBehaviour
     public List<Color> Colors;
 
     [Header("Parent để chứa các tile được tạo ra")]
-    public Transform parent; 
+    public Transform parent;
 
     void Start()
     {
@@ -63,7 +64,7 @@ public class ConnectTheDotsAlgorithm : MonoBehaviour
     /// <summary>
     /// Kiểm tra tất cả các cặp điểm trong ma trận và lưu vào danh sách allCoupleDotInMatrix.
     /// </summary>
-    List<coupledots> _allCoupleDots = new List<coupledots>();
+    public List<coupledots> _allCoupleDots = new List<coupledots>();
     public void DetectingAllCoupleDotInMatrix()
     {
         int value = _allDots[0].value;
@@ -89,12 +90,14 @@ public class ConnectTheDotsAlgorithm : MonoBehaviour
         if (_allDots.Count >= 2)
         {
             DetectingAllCoupleDotInMatrix(); // Đệ quy để kiểm tra tiếp các cặp điểm
+
         }
         else
         {
             StartAstarByDistance(); // Bắt đầu thuật toán A* dựa trên khoảng cách
+            // Tô màu các điểm trên ma trận
             DebugMatrix(grid);
-            MakeColor(grid); // Tô màu các điểm trên ma trận
+            MakeColor(grid);
         }
     }
 
@@ -102,7 +105,7 @@ public class ConnectTheDotsAlgorithm : MonoBehaviour
     /// Sắp xếp các cặp điểm theo khoảng cách và bắt đầu thuật toán A*.
     /// </summary>
     bool _currentCouplesFindingEnd;
-    List<coupledots> sortCouples = new List<coupledots>();
+    public List<coupledots> sortCouples = new List<coupledots>();
     public void StartAstarByDistance()
     {
         var enum1 = from cpdot in _allCoupleDots
@@ -113,92 +116,75 @@ public class ConnectTheDotsAlgorithm : MonoBehaviour
         {
             sortCouples.Add(e);
         }
-        var CurrentStep = 0;
-        ReSort(CurrentStep);
+        if (Backtrack(sortCouples))
+        {
+            Debug.Log("Tìm thấy lời giải:" + currentTrack);
+        }
+        else
+        {
+            Debug.Log("Không tìm được lời giải.");
+        }
     }
 
-    /// <summary>
-    ///  Kiểm tra và điều chỉnh thứ tự các cặp điểm.
-    /// </summary>
-    public void ReSort(int CurrentStep)
+    int currentTrack = 0;
+    public List<coupledots> selectedCouples = new List<coupledots>();
+    bool Backtrack(List<coupledots> sortList)
     {
-        CurrentStep++;
-        if (CurrentStep < 100)
+        currentTrack++;
+        if (currentTrack >= 1000) return false; //Do hạn chế của giải thuật chưa được tối ưu nên chỉ giới hạn ở 1000 lần check
+
+        if (selectedCouples.Count >= sortList.Count) return true; // Đã thử hết các cặp
+
+
+        for (int i = 0; i < sortList.Count; i++)
         {
-            for (int i = 0; i < sortCouples.Count; i++)
+            var currentCouple = sortList[i];
+
+            if (!CheckHaveCoupleInSavePath(sortList[i]))
             {
-                var dotStart = new dots(sortCouples[i].start.x, sortCouples[i].start.y);
-                var dotEnd = new dots(sortCouples[i].end.x, sortCouples[i].end.y);
+                Debug.Log("Backtrack: Duyet " + currentCouple.value);
+
+                var dotStart = new dots(currentCouple.start.x, currentCouple.start.y);
+                var dotEnd = new dots(currentCouple.end.x, currentCouple.end.y);
 
                 Debug.Log("Check" + dotStart.x + ":" + dotStart.y + "  " + dotEnd.x + ":" + dotEnd.y);
-                Astar(dotStart, dotEnd, sortCouples[i].value, grid); // Thực hiện thuật toán A*
+                Astar(dotStart, dotEnd, currentCouple.value, grid); // Thực hiện thuật toán A*
 
-                if (!_currentCouplesFindingEnd) // nếu cặp hiện tại không tìm thấy đường đi
+                if (_currentCouplesFindingEnd) // đã kiểm tra khi thực hiện A*
                 {
-                    CheckInAStep(i, 0, CurrentStep, 0); // Kiểm tra và điều chỉnh thứ tự các cặp điểm
-                    break;
-                }
-            }
-        }
-        else
-        {
-            Debug.Log("Khong co loi giai"); // Không tìm thấy giải pháp
-        }
-    }
+                    Debug.Log("Backtrack: Tim thay dương yes " + currentCouple.value);
+                    selectedCouples.Add(currentCouple);
 
-    /// <summary>
-    /// Kiểm tra và điều chỉnh thứ tự các cặp điểm nếu có điểm không tìm được đường đi.
-    /// </summary>
-    bool _detectingRoad;
-    public void CheckInAStep(int step, int a, int CurrentStep, int b)
+                    if (Backtrack(sortList)) return true;
+
+
+                }
+
+                // Quay lui
+                if (selectedCouples.Count > 0 && currentTrack < 1000)
+                {
+                    Debug.Log("Backtrack: Quay lui " + selectedCouples[^1].value);
+                    ClearPath(selectedCouples[^1]); // Xóa đường đã tạo
+                    selectedCouples.RemoveAt(selectedCouples.Count - 1);
+
+                }
+
+            }
+
+        }
+        return false;
+    }
+    bool CheckHaveCoupleInSavePath(coupledots cd)
     {
-        b++;
-        if (b < 100)
+        for (int i = 0; i < selectedCouples.Count; i++)
         {
-            _detectingRoad = true;
-            ClearNumberMatrix(); // Xóa và khôi phục ma trận về trạng thái ban đầu
-            for (int i = 0; i <= step; i++)
+            if (selectedCouples[i].value == cd.value)
             {
-                var dotStart = new dots(sortCouples[i].start.x, sortCouples[i].start.y);
-                var dotEnd = new dots(sortCouples[i].end.x, sortCouples[i].end.y);
-                Astar(dotStart, dotEnd, sortCouples[i].value, grid); // Thực hiện thuật toán A*
-                if (!_currentCouplesFindingEnd)
-                {
-                    _detectingRoad = false;
-                }
-            }
-
-            if (_detectingRoad)
-            {
-                ReSort(CurrentStep); // Tiếp tục thuật toán backtracking
-               
-            }
-            else
-            {
-                var arrayTemp = sortCouples.ToArray();
-                var index = step - a;
-                try
-                {
-                    var dot1 = sortCouples[index];
-                    var dot2 = sortCouples[index - 1];
-                    arrayTemp[index - 1] = dot1;
-                    arrayTemp[index] = dot2;
-                    a++;
-                }
-                catch (Exception e)
-                {
-                }
-                sortCouples.Clear();
-                sortCouples = arrayTemp.ToList();
-                CheckInAStep(step, a, CurrentStep, b); // Đệ quy để kiểm tra lại
+                return true;
             }
         }
-        else
-        {
-            Debug.Log("Khong co loi giai"); // Không tìm thấy giải pháp
-        }
+        return false;
     }
-
     /// <summary>
     /// Thuật toán A* để tìm đường đi ngắn nhất giữa hai điểm.
     /// </summary>
@@ -220,7 +206,7 @@ public class ConnectTheDotsAlgorithm : MonoBehaviour
     {
         CountLoop++;
         // Xét các điểm liền kề
-        ConsiderAdjacentDot(1, 0, Start, Q, CurrentDot, allDot, value, number); 
+        ConsiderAdjacentDot(1, 0, Start, Q, CurrentDot, allDot, value, number);
         ConsiderAdjacentDot(-1, 0, Start, Q, CurrentDot, allDot, value, number);
         ConsiderAdjacentDot(0, 1, Start, Q, CurrentDot, allDot, value, number);
         ConsiderAdjacentDot(0, -1, Start, Q, CurrentDot, allDot, value, number);
@@ -235,7 +221,7 @@ public class ConnectTheDotsAlgorithm : MonoBehaviour
             {
                 if (Q[i].distance < minDis) // Kiểm tra nếu khoảng cách của điểm hiện tại nhỏ hơn minDis
                 {
-                    Debug.Log("Lap toi da" + Q[i].start.x + ":"+ Q[i].start.y +"  " + Q[i].end.x + ":" + Q[i].end.y);
+                    Debug.Log("Lap toi da" + Q[i].start.x + ":" + Q[i].start.y + "  " + Q[i].end.x + ":" + Q[i].end.y);
                     minDis = Q[i].distance;
                     index = i; // Lưu vị trí của điểm có khoảng cách ngắn nhất
                 }
@@ -247,7 +233,7 @@ public class ConnectTheDotsAlgorithm : MonoBehaviour
             //Kiểm tra xem đã đến đích chưa
             if (Q[index].end.x == End.x && Q[index].end.y == End.y) // Nếu tìm thấy điểm kết thúc
             {
-                Debug.Log("Tim thay diem cuoi cung" ) ;
+                Debug.Log("Tim thay diem cuoi cung");
                 List<dots> Result = new List<dots>();
                 var dotEnd = dotExpanded[dotExpanded.Count - 1].end;
                 var dotStart = dotExpanded[dotExpanded.Count - 1].start;
@@ -266,14 +252,14 @@ public class ConnectTheDotsAlgorithm : MonoBehaviour
                 Q.Remove(Q[index]);
                 if (CountLoop < 10 * 10) // Giới hạn số lần lặp bằng kích thước ma trận 
                 {
-                    
+
                     AstarLoop(Start, End, Q, CurrentDot, dotExpanded, allDot, value, CountLoop, number);
                 }
             }
         }
         catch (Exception e)
         {
-            Debug.Log("Loi giai sai"); // Lỗi giải thuật
+            Debug.Log("Loi giai sai" + value); // Lỗi giải thuật
             _currentCouplesFindingEnd = false;
         }
     }
@@ -315,7 +301,7 @@ public class ConnectTheDotsAlgorithm : MonoBehaviour
                 {
                     // Kiểm tra xem điểm đã được xét chưa
                     var checkDot = new dots(CurrentDot.x + x, CurrentDot.y + y);
-                    if (!CheckDotInAllDot(checkDot, allDot)) 
+                    if (!CheckDotInAllDot(checkDot, allDot))
                     {
                         var distance = Math.Abs(Start.x - checkDot.x) + Math.Abs(Start.y - checkDot.y) + Math.Sqrt(Math.Pow(Math.Abs(Start.x - checkDot.x), 2) + Math.Pow(Math.Abs(Start.y - checkDot.y), 2));
                         var _value = new value(CurrentDot, checkDot, (float)distance);
@@ -423,6 +409,24 @@ public class ConnectTheDotsAlgorithm : MonoBehaviour
             for (int j = 0; j < 10; j++)
             {
                 grid[i, j] = _tempGrid[i, j];
+            }
+        }
+    }
+    public void ClearPath(coupledots coupledots)
+    {
+        for (int i = 0; i < 10; i++)
+        {
+            for (int j = 0; j < 10; j++)
+            {
+                //grid[i, j] = _tempGrid[i, j];
+                if (grid[i, j] == coupledots.value)
+                {
+                    Debug.Log("Xoa duong co gia tri " + coupledots.value);
+                    if (!(i == coupledots.start.x && j == coupledots.start.y) && !(i == coupledots.end.x && j == coupledots.end.y))
+                    {
+                        grid[i, j] = 0;
+                    }
+                }
             }
         }
     }
